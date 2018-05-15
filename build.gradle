@@ -1,6 +1,9 @@
+import org.gradle.internal.os.OperatingSystem
+
+
 buildscript {
     ext.kotlinVersion = '1.2.21'
-    ext.springBootVersion = '2.0.2.Release'
+    ext.springBootVersion = '2.0.2.RELEASE'
 
 
     repositories {
@@ -9,11 +12,9 @@ buildscript {
     dependencies {
         classpath 'com.google.protobuf:protobuf-gradle-plugin:0.8.5'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion"
-        classpath("org.springframework.boot:spring-boot-gradle-plugin:2.0.2.RELEASE")
+        classpath("org.springframework.boot:spring-boot-gradle-plugin:$springBootVersion")
     }
 }
-
-
 
 repositories {
     mavenCentral()
@@ -32,26 +33,24 @@ apply plugin: 'com.google.protobuf'
 apply plugin: 'org.springframework.boot'
 
 
+def googleCommonProtoVersion = "1.1.0"
 def grpcVersion = '1.12.0'
+
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
 dependencies {
+    compileOnly "org.springframework.boot:spring-boot-configuration-processor"
+
+    compile "org.apache.commons:commons-lang3:3.7"
     compile "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlinVersion"
-    compile("org.springframework.boot:spring-boot-starter-web")
-
-    compile "com.google.api.grpc:proto-google-common-protos:1.0.0"
-    compile group: 'org.jetbrains.kotlin', name: 'kotlin-reflect', version: "${kotlinVersion}"
-    compile group: 'org.bouncycastle', name: 'bcprov-jdk15on', version: '1.59'
-
+    compile "org.springframework.boot:spring-boot-starter-web"
+    compile "com.google.api.grpc:proto-google-common-protos:$googleCommonProtoVersion"
+    compile "org.jetbrains.kotlin:kotlin-reflect:${kotlinVersion}"
+    compile "org.bouncycastle:bcprov-jdk15on:1.59"
     compile "io.grpc:grpc-all:${grpcVersion}"
-    compile "io.grpc:grpc-protobuf:${grpcVersion}"
-    compile "io.grpc:grpc-stub:${grpcVersion}"
-    compile group: 'io.netty', name: 'netty-all', version: '4.1.24.Final'
-    compile 'io.netty:netty-transport-native-kqueue:4.1.24.Final:osx-x86_64'
-    testCompile "io.grpc:grpc-testing:${grpcVersion}" // gRCP testing utilities
-
-    testCompile group: 'junit', name: 'junit', version: '4.12'
+    compile "io.netty:netty-all:4.1.24.Final"
+    compile "io.netty:netty-transport-native-kqueue:4.1.24.Final:${getOsString()}-x86_64"
 }
 
 compileKotlin {
@@ -63,7 +62,7 @@ compileTestKotlin {
 
 protobuf {
     protoc {
-        artifact = 'com.google.protobuf:protoc:3.5.1-1'
+        artifact = "com.google.protobuf:protoc:3.5.1-1"
     }
     plugins {
         grpc {
@@ -76,4 +75,15 @@ protobuf {
         }
     }
 }
+
+static def getOsString() {
+    if(OperatingSystem.current().isMacOsX()) {
+        return "osx"
+    } else if (OperatingSystem.current().isLinux()) {
+        return "linux"
+    }
+
+    throw new IllegalArgumentException("Only MacOsX and Linux are supported since we are using unix domain sockets")
+}
+
 startScripts.enabled = false

@@ -1,5 +1,5 @@
 # Because the certs are downloaded during the server start we need to configure a late SSL tomcat connector
 server.ssl.enabled: false
-server:
-  port: 8085
+spiffe:
+  socketPath: /tmp/agent.sock
 

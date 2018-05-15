@@ -6,11 +6,16 @@ import io.grpc.*
 import io.grpc.ForwardingClientCall.SimpleForwardingClientCall
 import io.grpc.netty.NegotiationType
 import io.grpc.netty.NettyChannelBuilder
+import io.netty.channel.epoll.EpollDomainSocketChannel
+import io.netty.channel.epoll.EpollEventLoopGroup
 import io.netty.channel.kqueue.KQueueDomainSocketChannel
 import io.netty.channel.kqueue.KQueueEventLoopGroup
 import io.netty.channel.unix.DomainSocketAddress
+import org.apache.commons.lang3.SystemUtils
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
@@ -27,11 +32,10 @@ import javax.annotation.PostConstruct
 
 
 @Component
-class SpiffeSvidRetrieval() {
+class SpiffeSvidRetrieval(private @Autowired val spiffeProperties: SpiffeProperties) {
     private val logger = LoggerFactory.getLogger(SpiffeSvidRetrieval::class.java)
 
-
-    val keyStore = KeyStore.getInstance(KeyStore.getDefaultType())!!;
+    private val keyStore = KeyStore.getInstance(KeyStore.getDefaultType())!!
 
     @Bean
     fun provideKeyStore(): KeyStore {
@@ -40,18 +44,13 @@ class SpiffeSvidRetrieval() {
 
     init {
         keyStore.load(null, "".toCharArray())
-        Security.addProvider(BouncyCastleProvider());
     }
 
-    // TODO differentiate between linux and mac native channels
-    // TODO make socket configurable
     private val spiffeStub: SpiffeWorkloadAPIGrpc.SpiffeWorkloadAPIBlockingStub
         get() {
-            val originalChannel = NettyChannelBuilder.forAddress(DomainSocketAddress("/tmp/agent.sock"))
-                    .eventLoopGroup(KQueueEventLoopGroup())
-                    .channelType(KQueueDomainSocketChannel::class.java)
-                    .negotiationType(NegotiationType.PLAINTEXT)
-                    .build();
+            val channelBuilder = configureNativeSocket(NettyChannelBuilder.forAddress(DomainSocketAddress(spiffeProperties.socketPath ))
+                    .negotiationType(NegotiationType.PLAINTEXT))
+            val originalChannel = channelBuilder.build()
             val channel = ClientInterceptors.intercept(originalChannel, HeaderClientInterceptor())
 
 
@@ -63,6 +62,17 @@ class SpiffeSvidRetrieval() {
             }
             return blockingStub
         }
+
+    private fun configureNativeSocket(channelBuilder: NettyChannelBuilder): NettyChannelBuilder {
+        if (SystemUtils.IS_OS_MAC ){
+            return channelBuilder.eventLoopGroup(KQueueEventLoopGroup())
+                    .channelType(KQueueDomainSocketChannel::class.java)
+        } else if(SystemUtils.IS_OS_LINUX) {
+            return channelBuilder.eventLoopGroup(EpollEventLoopGroup())
+                    .channelType(EpollDomainSocketChannel::class.java)
+        }
+        throw IllegalArgumentException("Invalid OS. Mac or Linux are needed for Domain Sockets")
+    }
 
     @PostConstruct
     @Scheduled(fixedRate = 5 * 60 * 1000)
@@ -89,7 +99,7 @@ class SpiffeSvidRetrieval() {
         logger.info("Successfully retrieved SVID: $alias")
 
         val kf = KeyFactory.getInstance("ECDSA", BouncyCastleProvider())
-        val privateKey = kf.generatePrivate(PKCS8EncodedKeySpec(svid.x509SvidKey.toByteArray()));
+        val privateKey = kf.generatePrivate(PKCS8EncodedKeySpec(svid.x509SvidKey.toByteArray()))
 
 
         keyStore.setKeyEntry("default", privateKey, "".toCharArray(), chain)
@@ -100,7 +110,7 @@ class SpiffeSvidRetrieval() {
         caCertificates.forEach { c ->
             keyStore.setCertificateEntry("$alias-ca-until-${(c as X509Certificate).notAfter}", c)
         }
-        logger.info("Added ${caCertificates.size} for $alias")
+        logger.info("Added ${caCertificates.size} CAs for $alias")
     }
 
 
