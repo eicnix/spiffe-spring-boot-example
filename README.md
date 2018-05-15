@@ -1,6 +1,9 @@
-# Spiffe Spring Boot Tomcat example
-This is an example on how to integrate the dynamic X509 certificates issued by Spiffe into a Java Web Server.
+# Spiffe/Spire Spring Boot Tomcat example
+This is an example on how to integrate the dynamic X509 certificates issued by Spiffe/Spire into a Java Web Server.
 
+When the server starts it will retrieve all issued SVIDs and X509 certificates from spire-agent. The retrieved certificates, keys and ca certificates will be stored in the Java Keystore. Afterwards the server will renew his SVIDs and certificates every 5 minutes. 
+
+The issue in this example wasn't interacting with Spire but rather getting Tomcat and the Java KeyStore to deal with dynamic certificates that are not available during the startup but must be retrieved and configured after the server start. 
 ## Running this example
 Required:
 * Either Linux or BSD system since the communication between the app and spire requires a unix domain socket
